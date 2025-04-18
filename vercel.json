@@ -1,0 +1,18 @@
+{
+  "builds": [
+    {
+      "src": "*/vercel.json",  // 指向实际入口文件
+      "use": "@vercel/python", // 根据项目类型选择Runtime
+      "config": { 
+        "maxLambdaSize": "15mb",
+        "runtime": "python3.9" // 与version.txt一致
+      }
+    }
+  ],
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "app/main.py"    // 指向主程序入口
+    }
+  ]
+}

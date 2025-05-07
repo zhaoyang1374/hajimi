@@ -1,11 +1,11 @@
 import time
-from threading import Lock
+import asyncio
 from fastapi import HTTPException, Request
 
 rate_limit_data = {}
-rate_limit_lock = Lock()
+rate_limit_lock = asyncio.Lock() 
 
-def protect_from_abuse(request: Request, max_requests_per_minute: int = 30, max_requests_per_day_per_ip: int = 600):
+async def protect_from_abuse(request: Request, max_requests_per_minute: int = 30, max_requests_per_day_per_ip: int = 600):
     now = int(time.time())
     minute = now // 60
     day = now // (60 * 60 * 24)
@@ -13,9 +13,9 @@ def protect_from_abuse(request: Request, max_requests_per_minute: int = 30, max_
     minute_key = f"{request.url.path}:{minute}"
     day_key = f"{request.client.host}:{day}"
 
-    with rate_limit_lock:
-        minute_count, minute_timestamp = rate_limit_data.get(
-            minute_key, (0, now))
+    async with rate_limit_lock:
+        minute_count, minute_timestamp = rate_limit_data.get(minute_key, (0, now))
+        
         if now - minute_timestamp >= 60:
             minute_count = 0
             minute_timestamp = now

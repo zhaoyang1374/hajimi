@@ -1,16 +1,12 @@
-import requests
 import json
 import os
-import asyncio
-import time
-from app.models import ChatCompletionRequest, Message
+import httpx # 添加 httpx 导入
+from app.models import ChatCompletionRequest
 from dataclasses import dataclass
 from typing import Optional, Dict, Any, List
 import httpx
-import logging
 import secrets
 import string
-from app.utils import format_log_message
 import app.config.settings as settings
 
 from app.utils.logging import log
@@ -20,16 +16,14 @@ def generate_secure_random_string(length):
     secure_random_string = ''.join(secrets.choice(all_characters) for _ in range(length))
     return secure_random_string
 
-logger = logging.getLogger('my_logger')
-
 @dataclass
 class GeneratedText:
     text: str
     finish_reason: Optional[str] = None
 
 
-class ResponseWrapper:
-    def __init__(self, data: Dict[Any, Any]):  # 正确的初始化方法名
+class GeminiResponseWrapper:
+    def __init__(self, data: Dict[Any, Any]):  
         self._data = data
         self._text = self._extract_text()
         self._finish_reason = self._extract_finish_reason()
@@ -37,7 +31,9 @@ class ResponseWrapper:
         self._candidates_token_count = self._extract_candidates_token_count()
         self._total_token_count = self._extract_total_token_count()
         self._thoughts = self._extract_thoughts()
+        self._function_call = self._extract_function_call()
         self._json_dumps = json.dumps(self._data, indent=4, ensure_ascii=False)
+        self._model = "gemini"
 
     def _extract_thoughts(self) -> Optional[str]:
         try:
@@ -53,10 +49,24 @@ class ResponseWrapper:
             text=""
             for part in self._data['candidates'][0]['content']['parts']:
                 if 'thought' not in part:
-                    text+=part['text']
-            return part['text']
+                    text += part['text']
+            return text
         except (KeyError, IndexError):
             return ""
+
+    def _extract_function_call(self) -> Optional[Dict[str, Any]]:
+        try:
+            parts = self._data.get('candidates', [{}])[0].get('content', {}).get('parts', [])
+            # 使用列表推导式查找所有包含 'functionCall' 的 part，并提取其值
+            function_calls = [
+                part['functionCall']
+                for part in parts
+                if isinstance(part, dict) and 'functionCall' in part 
+            ]
+            # 如果列表不为空，则返回列表；否则返回 None
+            return function_calls if function_calls else None
+        except (KeyError, IndexError, TypeError):
+            return None
 
     def _extract_finish_reason(self) -> Optional[str]:
         try:
@@ -81,6 +91,9 @@ class ResponseWrapper:
             return self._data['usageMetadata'].get('totalTokenCount')
         except (KeyError):
             return None
+
+    def set_model(self,model) -> Optional[str]:
+        self._model = model
 
     @property
     def text(self) -> str:
@@ -110,6 +123,14 @@ class ResponseWrapper:
     def json_dumps(self) -> str:
         return self._json_dumps
 
+    @property
+    def model(self) -> str:
+        return self._model
+
+    @property
+    def function_call(self) -> Optional[Dict[str, Any]]:
+        return self._function_call
+
 
 class GeminiClient:
 
@@ -120,70 +141,109 @@ class GeminiClient:
         self.api_key = api_key
 
     # 请求参数处理
-    def _prepare_request_data(self, request, contents, safety_settings, system_instruction,model):
-        api_version = "v1alpha" if "think" in request.model else "v1beta"
-        if settings.search["search_mode"] and model.endswith("-search"):
-            extra_log={'key': self.api_key[:8], 'model':model}
-            log('INFO', "开启联网搜索模式", extra=extra_log)
-            data = {
-                "contents": contents,
-                "tools": [{"google_search": {}}],
-                "generationConfig": self._get_generation_config(request),
-                "safetySettings": safety_settings,
-            }
-        else:
-            data = {
-                "contents": contents,
-                "generationConfig": self._get_generation_config(request),
-                "safetySettings": safety_settings,
-            }
-        if system_instruction:
-            data["system_instruction"] = system_instruction
-        return api_version, data
-    
-    def _get_generation_config(self, request):
+    def _prepare_request_data(self, request: ChatCompletionRequest, contents, safety_settings, system_instruction, model):
+        
         config_params = {
             "temperature": request.temperature,
             "maxOutputTokens": request.max_tokens,
             "topP": request.top_p,
             "topK": request.top_k,
             "stopSequences": request.stop if isinstance(request.stop, list) else [request.stop] if request.stop is not None else None,
-            "candidateCount": request.n
+            "candidateCount": request.n,
         }
-        return {k: v for k, v in config_params.items() if v is not None}
+        if request.thinking_budget:
+            config_params["thinkingConfig"] = {
+                "thinkingBudget": request.thinking_budget
+            }
+        generationConfig = {k: v for k, v in config_params.items() if v is not None}
+        
+        api_version = "v1alpha" if "think" in request.model else "v1beta"
+        
+        data = {
+            "contents": contents,
+            "generationConfig": generationConfig,
+            "safetySettings": safety_settings,
+        }
 
-    # 假流式保活处理 (未完成，所以未使用)
-    async def keep_alive_sender(self, request: ChatCompletionRequest):
-        extra_log={'key': self.api_key[:8], 'request_type': 'fake_stream', 'model': request.model}
-        log('INFO', "使用假流式请求模式（发送换行符保持连接）", extra=extra_log)
-        try:
-            
-            # 每隔一段时间发送换行符作为保活消息，直到外部取消此生成器
-            start_time = time.time()
-            while True:
-                yield "\n"
-                await asyncio.sleep(settings.FAKE_STREAMING_INTERVAL)
-                
-                # 如果等待时间过长（超过300秒），抛出超时异常，让外部处理
-                if time.time() - start_time > 300:
-                    log('ERROR', f"假流式请求等待时间过长",extra=extra_log)
-                    
-                    raise TimeoutError("假流式请求等待时间过长")
-            
-        except Exception as e:
-            if not isinstance(e, asyncio.CancelledError):  
-                log('ERROR', f"假流式处理期间发生错误: {str(e)}", extra=extra_log)
-            raise e
-        finally:
-            log('INFO', "假流式请求结束", extra=extra_log)
+        # --- 函数调用处理 ---
+        # 1. 添加 tools (函数声明)
+        function_declarations = []
+        if request.tools:
+            # 显式提取 Gemini API 所需的字段，避免包含 'id' 等无效字段
+            function_declarations = []
+            for tool in request.tools:
+                if tool.get("type") == "function":
+                    func_def = tool.get("function")
+                    if func_def:
+                        # 只包含 Gemini API 接受的字段
+                        declaration = {
+                            "name": func_def.get("name"),
+                            "description": func_def.get("description"),
+                        }
+                        # 获取 parameters 并移除可能存在的 $schema 字段
+                        parameters = func_def.get("parameters")
+                        if isinstance(parameters, dict) and "$schema" in parameters:
+                            parameters = parameters.copy() 
+                            del parameters["$schema"]
+                        if parameters is not None:
+                            declaration["parameters"] = parameters
 
-    # 真流式处理
+                        # 移除值为 None 的键，以保持 payload 清洁
+                        declaration = {k: v for k, v in declaration.items() if v is not None}
+                        if declaration.get("name"): # 确保 name 存在
+                            function_declarations.append(declaration)
+
+        if function_declarations:
+            data["tools"] = [{"function_declarations": function_declarations}]
+
+        # 2. 添加 tool_config (基于 tool_choice)
+        tool_config = None 
+        if request.tool_choice:
+            choice = request.tool_choice
+            mode = None
+            allowed_functions = None
+            if isinstance(choice, str):
+                if choice == "none":
+                    mode = "NONE"
+                elif choice == "auto":
+                    mode = "AUTO"
+            elif isinstance(choice, dict) and choice.get("type") == "function":
+                func_name = choice.get("function", {}).get("name")
+                if func_name:
+                    mode = "ANY" # 'ANY' 模式用于强制调用特定函数
+                    allowed_functions = [func_name]
+            
+            # 如果成功解析出有效的 mode，构建 tool_config
+            if mode:
+                config = {"mode": mode}
+                if allowed_functions:
+                    config["allowed_function_names"] = allowed_functions
+                tool_config = {"function_calling_config": config}
+        
+        # 3. 添加 tool_config 到 data
+        if tool_config:
+            data["tool_config"] = tool_config
+        
+        # 联网模式
+        if settings.search["search_mode"] and model.endswith("-search"):
+            log('INFO', "开启联网搜索模式", extra={'key': self.api_key[:8], 'model':request.model})
+            
+            data.setdefault("tools", []).append({"google_search": {}})
+        
+        if system_instruction:
+            data["system_instruction"] = system_instruction
+        
+        return api_version, data
+    
+
+    # 流式请求
     async def stream_chat(self, request: ChatCompletionRequest, contents, safety_settings, system_instruction):
         # 真流式请求处理逻辑
         extra_log = {'key': self.api_key[:8], 'request_type': 'stream', 'model': request.model}
         log('INFO', "流式请求开始", extra=extra_log)
         
         api_version, data = self._prepare_request_data(request, contents, safety_settings, system_instruction,request.model)
+        
         model= request.model.removesuffix("-search")
         url = f"https://generativelanguage.googleapis.com/{api_version}/models/{model}:streamGenerateContent?key={self.api_key}&alt=sse"
         headers = {
@@ -192,52 +252,33 @@ class GeminiClient:
         
         async with httpx.AsyncClient() as client:
             async with client.stream("POST", url, headers=headers, json=data, timeout=600) as response:
-                buffer = b""
+                buffer = b"" # 用于累积可能不完整的 JSON 数据
                 try:
                     async for line in response.aiter_lines():
-                        if not line.strip():
+                        if not line.strip(): # 跳过空行 (SSE 消息分隔符)
                             continue
                         if line.startswith("data: "):
-                            line = line[len("data: "):]
+                            line = line[len("data: "):].strip() # 去除 "data: " 前缀
+                        
+                        # 检查是否是结束标志，如果是，结束循环
+                        if line == "[DONE]":
+                            break 
+                        
                         buffer += line.encode('utf-8')
                         try:
+                            # 尝试解析整个缓冲区
                             data = json.loads(buffer.decode('utf-8'))
-                            buffer = b""
-                            if 'candidates' in data and data['candidates']:
-                                candidate = data['candidates'][0]
-                                if 'content' in candidate:
-                                    content = candidate['content']
-                                    if 'parts' in content and content['parts']:
-                                        parts = content['parts']
-                                        text = ""
-                                        for part in parts:
-                                            if 'text' in part:
-                                                text += part['text']
-                                        if text:
-                                            yield text
-                                        
-                                if candidate.get("finishReason") and candidate.get("finishReason") != "STOP":
-                                    error_msg = f"模型的响应被截断: {candidate.get('finishReason')}"
-                                    extra_log_error = {'key': self.api_key[:8], 'request_type': 'stream', 'model': request.model, 'status_code': 'ERROR', 'error_message': error_msg}
-                                    log_msg = format_log_message('WARNING', error_msg, extra=extra_log_error)
-                                    logger.warning(log_msg)
-                                    raise ValueError(error_msg)
-                                
-                                if 'safetyRatings' in candidate:
-                                    for rating in candidate['safetyRatings']:
-                                        if rating['probability'] == 'HIGH':
-                                            error_msg = f"模型的响应被截断: {rating['category']}"
-                                            extra_log_safety = {'key': self.api_key[:8], 'request_type': 'stream', 'model': request.model, 'status_code': 'ERROR', 'error_message': error_msg}
-                                            log_msg = format_log_message('WARNING', error_msg, extra=extra_log_safety)
-                                            logger.warning(log_msg)
-                                            raise ValueError(error_msg)
+                            # 解析成功，清空缓冲区
+                            buffer = b"" 
+                            
+                            yield GeminiResponseWrapper(data)
+
                         except json.JSONDecodeError:
-                            continue
+                            # JSON 不完整，继续累积到 buffer
+                            continue 
                         except Exception as e:
-                            error_msg = f"流式处理期间发生错误: {str(e)}"
-                            extra_log_stream_error = {'key': self.api_key[:8], 'request_type': 'stream', 'model': request.model, 'status_code': 'ERROR', 'error_message': error_msg}
-                            log_msg = format_log_message('ERROR', error_msg, extra=extra_log_stream_error)
-                            logger.error(log_msg)
+                            log('ERROR', f"流式处理期间发生错误", 
+                                extra={'key': self.api_key[:8], 'request_type': 'stream', 'model': request.model})
                             raise e
                 except Exception as e:
                     raise e
@@ -245,9 +286,7 @@ class GeminiClient:
                     log('info', "流式请求结束")
 
     # 非流式处理
-    def complete_chat(self, request: ChatCompletionRequest, contents, safety_settings, system_instruction):
-        extra_log = {'key': self.api_key[:8], 'request_type': 'non-stream', 'model': request.model}
-        log('info', "非流式请求开始", extra=extra_log)
+    async def complete_chat(self, request: ChatCompletionRequest, contents, safety_settings, system_instruction):
         
         api_version, data = self._prepare_request_data(request, contents, safety_settings, system_instruction,request.model)
         model= request.model.removesuffix("-search")
@@ -257,44 +296,79 @@ class GeminiClient:
         }
         
         try:
-            response = requests.post(url, headers=headers, json=data)
-            response.raise_for_status()
-            log('info', f"非流式请求成功完成，使用密钥: {self.api_key[:8]}...", extra=extra_log)
+            async with httpx.AsyncClient() as client:
+                response = await client.post(url, headers=headers, json=data, timeout=600) 
+                response.raise_for_status() # 检查 HTTP 错误状态
             
-            return ResponseWrapper(response.json())
+            return GeminiResponseWrapper(response.json())
         except Exception as e:
             raise
 
-    def convert_messages(self, messages, use_system_prompt=False,model=None):
+    # OpenAI 格式请求转换为 gemini 格式请求
+    def convert_messages(self, messages, use_system_prompt=False, model=None):
         gemini_history = []
         errors = []
+        
         system_instruction_text = ""
-        is_system_phase = use_system_prompt
+        system_instruction_parts = [] # 用于收集系统指令文本
+        
+        # 处理系统指令 
+        if use_system_prompt:
+            # 遍历消息列表，查找开头的连续 system 消息
+            for i, message in enumerate(messages):
+                # 必须是 system 角色且内容是字符串
+                if message.role == 'system' and isinstance(message.content, str):
+                    system_instruction_parts.append(message.content)
+                else:
+                    break # 遇到第一个非 system 或内容非字符串的消息就停止
+        
+        # 将收集到的系统指令合并为一个字符串
+        system_instruction_text = "\n".join(system_instruction_parts)
+        system_instruction = {"parts": [{"text": system_instruction_text}]} if system_instruction_text else None
+        
+        # 转换主要消息
+        
         for i, message in enumerate(messages):
             role = message.role
             content = message.content
             if isinstance(content, str):
-                if is_system_phase and role == 'system':
-                    if system_instruction_text:
-                        system_instruction_text += "\n" + content
-                    else:
-                        system_instruction_text = content
-                else:
-                    is_system_phase = False
 
-                    if role in ['user', 'system']:
-                        role_to_use = 'user'
-                    elif role == 'assistant':
-                        role_to_use = 'model'
+                if role == 'tool':
+                    role_to_use = 'function'
+                    tool_call_id = message.tool_call_id
+
+                    prefix = "call_"
+                    if tool_call_id.startswith(prefix):
+                        # 假设 tool_call_id = f"call_{function_name}" (response.py中的处理)
+                        function_name = tool_call_id[len(prefix):]
                     else:
-                        errors.append(f"Invalid role: {role}")
                         continue
 
-                    if gemini_history and gemini_history[-1]['role'] == role_to_use:
-                        gemini_history[-1]['parts'].append({"text": content})
-                    else:
-                        gemini_history.append(
-                            {"role": role_to_use, "parts": [{"text": content}]})
+                    function_response_part = {
+                        "functionResponse": {
+                            "name": function_name,
+                            "response": {"content": content}
+                        }
+                    }
+                    
+                    gemini_history.append({"role": role_to_use, "parts": [function_response_part]})
+                    
+                    continue
+                elif role in ['user', 'system']:
+                    role_to_use = 'user'
+                elif role == 'assistant':
+                    role_to_use = 'model'
+                    
+                else:
+                    errors.append(f"Invalid role: {role}")
+                    continue
+
+                # Gemini 的一个重要规则：连续的同角色消息需要合并
+                # 如果 gemini_history 已有内容，并且最后一条消息的角色和当前要添加的角色相同
+                if gemini_history and gemini_history[-1]['role'] == role_to_use:
+                    gemini_history[-1]['parts'].append({"text": content})
+                else:
+                    gemini_history.append({"role": role_to_use, "parts": [{"text": content}]})
             elif isinstance(content, list):
                 parts = []
                 for item in content:
@@ -326,6 +400,7 @@ class GeminiClient:
                     else:
                         errors.append(f"Invalid role: {role}")
                         continue
+                    
                     if gemini_history and gemini_history[-1]['role'] == role_to_use:
                         gemini_history[-1]['parts'].extend(parts)
                     else:
@@ -333,15 +408,20 @@ class GeminiClient:
                             {"role": role_to_use, "parts": parts})
         if errors:
             return errors
-        else:
-            # 只有当search_mode为真且模型名称以-search结尾时，才添加搜索提示
-            if settings.search["search_mode"] and model and model.endswith("-search"):
-                gemini_history.insert(len(gemini_history)-2,{'role': 'user', 'parts': [{'text':settings.search["search_prompt"]}]})
-            if settings.RANDOM_STRING:
-                gemini_history.insert(1,{'role': 'user', 'parts': [{'text': generate_secure_random_string(settings.RANDOM_STRING_LENGTH)}]})
-                gemini_history.insert(len(gemini_history)-1,{'role': 'user', 'parts': [{'text': generate_secure_random_string(settings.RANDOM_STRING_LENGTH)}]})
-                log_msg = format_log_message('INFO', "伪装消息成功")
-            return gemini_history, {"parts": [{"text": system_instruction_text}]}
+        
+        # --- 后处理 ---
+        
+        # 注入搜索提示
+        if settings.search["search_mode"] and model and model.endswith("-search"):
+            gemini_history.insert(len(gemini_history)-2,{'role': 'user', 'parts': [{'text':settings.search["search_prompt"]}]})
+        
+        # 注入随机字符串
+        if settings.RANDOM_STRING:
+            gemini_history.insert(1,{'role': 'user', 'parts': [{'text': generate_secure_random_string(settings.RANDOM_STRING_LENGTH)}]})
+            gemini_history.insert(len(gemini_history)-1,{'role': 'user', 'parts': [{'text': generate_secure_random_string(settings.RANDOM_STRING_LENGTH)}]})
+            log('INFO', "伪装消息成功")
+        
+        return gemini_history, system_instruction
 
     @staticmethod
     async def list_available_models(api_key) -> list:
@@ -354,7 +434,7 @@ class GeminiClient:
             models = []
             for model in data.get("models", []):
                 models.append(model["name"])
-                if model["name"].startswith("models/gemini-2"):
+                if model["name"].startswith("models/gemini-2") and settings.search["search_mode"]:
                     models.append(model["name"] + "-search")
             models.extend(GeminiClient.EXTRA_MODELS)
                 

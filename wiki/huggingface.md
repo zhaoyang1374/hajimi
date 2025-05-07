@@ -1,19 +1,35 @@
 # hajimi使用教程
 
-## 1. 安装
-### 1.1 下载
-- 从[releases](https://github.com/wyeeeee/hajimi/releases/tag/sp)下载单文件特别版的Dockerfile。
-- 下载后应只有一个Dockerfile文件。
+## 0. 前置镜像构建
+### 0.1 Fork
+- 点击[Fork 本项目](https://github.com/wyeeeee/hajimi/fork)。<br>![fork](./img/fork.png)
 
+### 0.2 构建镜像
+- 点击 Action。<br>![action](./img/action.png)
+- 点击绿色按钮 **I understand my workflows, go ahead and enable them**。
+- 在左侧选择 **GHCR CI**。<br>![image](./img/image.png)
+- 点击右侧的 **Run workflow** 按钮。
+- 直接点击弹出的 **Run workflow**，开始构建镜像。
+- 镜像地址为：`ghcr.io/你的github用户名/hajimi:latest`，例如：`ghcr.io/wyeeeee/hajimi:latest`。
+### 0.3 更新
+- 在你Fork的项目中点击**sync fork**，等待镜像自动构建完成后，在huggingface的settings中点击rebuild
+## 1. 安装
+### 1.1 配置
+```Dockerfile
+FROM ghcr.io/你的github用户名/hajimi:latest
+
+EXPOSE 7860
+
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "7860"]
+```
 
 ### 1.2 使用huggingface space部署项目
 - 在[huggingface](https://huggingface.co)注册账号。
     * 注意：用户名不要使用任何符号
 - 注册完成后，进入[spaces](https://huggingface.co/spaces)，如图所示，点击new spaces。<br> 注意：<br>![spaces](./img/spaces.png)
 - 如图所示，填入创建选项，填写完成后，点击create space，一定要记住owner与space name，在之后的酒馆连接中要使用<br> 注意：pace name不要使用任何标点符号<br>![create_space](./img/create_space.png)
-- 如图所示，选择upload files<br>![files](./img/files.png)
-- 如图所示，将1.1下载Dockerfile拖入，上传完成后点击Commit changes to main<br>![upload_files](./img/upload_files.png)
-
+- 如图所示，选择 **Create a new file**<br>![files](./img/files.png)
+- 如图所示，将1.1配置的Dockerfile填入，上传完成后点击Commit changes to main<br>![new](./img/new.png)
 
 ## 2. 配置
 ### 2.0 什么是环境变量？
@@ -43,18 +59,22 @@
 
 | 环境变量 | 说明 | 默认值 | 必需 |
 |---------|------|--------|------|
+| `TZ` | 配置时区 | Asia/Shanghai | 否 |
 | `MAX_REQUESTS_PER_MINUTE` | 每分钟最大请求数 | 30 | 否 |
 | `MAX_REQUESTS_PER_DAY_PER_IP` | 每天每个 IP 最大请求数 | 600 | 否 |
 | `FAKE_STREAMING` | 是否启用假流式传输 | true | 否 |
-| `API_KEY_DAILY_LIMIT` | 单api 24小时最大使用次数 | 25 | 否 |
+| `API_KEY_DAILY_LIMIT` | 单api 24小时最大使用次数 | 100 | 否 |
+| `MAX_EMPTY_RESPONSES` | 空响应重试次数 | 5 | 否 |
 | `BLOCKED_MODELS` | 需要屏蔽的模型名称，多个模型用英文逗号分隔 | 无 | 否 |
 | `RANDOM_STRING` | 是否启用伪装信息 | true | 否 |
-| `RANDOM_STRING_LENGTH` | 伪装信息长度 | 20 | 否 |
+| `RANDOM_STRING_LENGTH` | 伪装信息长度 | 5 | 否 |
 | `CONCURRENT_REQUESTS` | 默认的并发请求数 | 1 | 否 |
-| `INCREASE_CONCURRENT_ON_FAILURE` | 当请求失败时增加的并发请求数 | 1 | 否 |
+| `INCREASE_CONCURRENT_ON_FAILURE` | 当请求失败时增加的并发请求数 | 0 | 否 |
 | `MAX_CONCURRENT_REQUESTS` | 允许的最大并发请求数 | 3 | 否 |
-| `SEARCH_MODE` | 是否启用联网模式 | true | 否 |
+| `SEARCH_MODE` | 是否启用联网模式 | false | 否 |
 | `SEARCH_PROMPT` | 联网模式提示词 | （使用搜索工具联网搜索，需要在content中结合搜索内容） | 否 |
+| `ENABLE_VERTEX` | 是否启用vertex | false | 否 |
+| `GOOGLE_CREDENTIALS_JSON` | vertex ai 凭证 | 无 | 否 |
 
 > **移动设备提示**：如果表格在您的设备上显示不完整，可以尝试横向滚动查看完整内容。
 
@@ -68,7 +88,7 @@
 
 ## 4. 更新
 ### 4.1 更新方法
-- 只需按照 1.1下载最新版，接着参照2.1中的上传文件，在您的space中重新上传文件，文件会自动覆盖并更新<br>注意：无需删除原始文件，无需删除space，只需重新上传文件即可
+- 在单文件版本中，更新只需要在相应的huggingface space的settings中选择Factory rebuild，在rebuild完成后系统会自动更新到最新版
 
 ## 5. 注意事项
 ### 5.1 假流式传输模式说明

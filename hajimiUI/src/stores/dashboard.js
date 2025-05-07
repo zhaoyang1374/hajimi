@@ -12,6 +12,12 @@ export const useDashboardStore = defineStore('dashboard', () => {
     minuteCalls: 0
   })
 
+  // 添加图表相关的时间序列数据
+  const timeSeriesData = ref({
+    calls: [],  // API调用时间序列
+    tokens: []  // Token使用时间序列
+  })
+
   const config = ref({
     maxRequestsPerMinute: 0,
     maxRequestsPerDayPerIp: 0,
@@ -24,7 +30,9 @@ export const useDashboardStore = defineStore('dashboard', () => {
     hasUpdate: false,
     concurrentRequests: 0,
     increaseConcurrentOnFailure: 0,
-    maxConcurrentRequests: 0
+    maxConcurrentRequests: 0,
+    maxRetryNum: 0,
+    searchPrompt: ''
   })
 
   const apiKeyStats = ref([])
@@ -88,6 +96,15 @@ export const useDashboardStore = defineStore('dashboard', () => {
       enableVertex: data.enable_vertex || false
     }
 
+    // 更新时间序列数据
+    if (data.calls_time_series) {
+      timeSeriesData.value.calls = data.calls_time_series
+    }
+    
+    if (data.tokens_time_series) {
+      timeSeriesData.value.tokens = data.tokens_time_series
+    }
+
     // 更新配置数据
     config.value = {
       maxRequestsPerMinute: data.max_requests_per_minute || 0,
@@ -98,18 +115,32 @@ export const useDashboardStore = defineStore('dashboard', () => {
       randomString: data.random_string || false,
       randomStringLength: data.random_string_length || 0,
       searchMode: data.search_mode || false,
+      searchPrompt: data.search_prompt || '',
       localVersion: data.local_version || '',
       remoteVersion: data.remote_version || '',
       hasUpdate: data.has_update || false,
       concurrentRequests: data.concurrent_requests || 0,
       increaseConcurrentOnFailure: data.increase_concurrent_on_failure || 0,
       maxConcurrentRequests: data.max_concurrent_requests || 0,
-      enableVertex: data.enable_vertex || false
+      enableVertex: data.enable_vertex || false,
+      enableVertexExpress: data.enable_vertex_express || false,
+      vertexExpressApiKey: data.vertex_express_api_key || false,
+      maxRetryNum: data.max_retry_num || 0
     }
 
     // 更新API密钥统计
     if (data.api_key_stats) {
-      apiKeyStats.value = data.api_key_stats
+      apiKeyStats.value = data.api_key_stats.map(stat => ({
+        ...stat,
+        // 确保model_stats的每个模型都有calls和tokens两个指标
+        model_stats: Object.entries(stat.model_stats || {}).reduce((acc, [model, data]) => {
+          acc[model] = {
+            calls: typeof data === 'object' ? data.calls : data, // 兼容旧格式
+            tokens: typeof data === 'object' ? data.tokens : 0
+          }
+          return acc
+        }, {})
+      }))
       
       // 提取所有可用的模型
       const models = new Set(['all']) // 始终包含"全部"选项
@@ -142,6 +173,18 @@ export const useDashboardStore = defineStore('dashboard', () => {
   // 切换夜间模式
   function toggleDarkMode() {
     isDarkMode.value = !isDarkMode.value
+  }
+
+  // 切换Vertex AI配置
+  async function toggleVertex() {
+    try {
+      const newValue = !config.value.enableVertex
+      await updateConfig('enableVertex', newValue, '123') // 使用默认密码
+      // 更新本地状态
+      config.value.enableVertex = newValue
+    } catch (error) {
+      console.error('切换Vertex AI失败:', error)
+    }
   }
 
   // 更新配置项
@@ -181,12 +224,14 @@ export const useDashboardStore = defineStore('dashboard', () => {
     apiKeyStats,
     logs,
     isRefreshing,
+    timeSeriesData,  // 导出时间序列数据
     fetchDashboardData,
     selectedModel,
     availableModels,
     setSelectedModel,
     isDarkMode,
     toggleDarkMode,
-    updateConfig
+    updateConfig,
+    toggleVertex
   }
 })

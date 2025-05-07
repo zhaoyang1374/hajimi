@@ -25,23 +25,12 @@ class ActiveRequestsManager:
             return True
         return False
     
-    def remove_by_prefix(self, prefix: str):
-        """移除所有以特定前缀开头的活跃请求任务"""
-        keys_to_remove = [k for k in self.active_requests.keys() if k.startswith(prefix)]
-        for key in keys_to_remove:
-            self.remove(key)
-        return len(keys_to_remove)
-    
     def clean_completed(self):
         """清理所有已完成或已取消的任务"""
-        keys_to_remove = []
         
         for key, task in self.active_requests.items():
             if task.done() or task.cancelled():
-                keys_to_remove.append(key)
-        
-        for key in keys_to_remove:
-            self.remove(key)
+                del self.active_requests[key]        
         
         # if keys_to_remove:
         #    log('info', f"清理已完成请求任务: {len(keys_to_remove)}个", cleanup='active_requests')
@@ -61,12 +50,3 @@ class ActiveRequestsManager:
         
         if long_running_keys:
             log('warning', f"取消长时间运行的任务: {len(long_running_keys)}个", cleanup='long_running_tasks')
-
-async def check_client_disconnect(http_request, current_api_key: str, request_type: str, model: str):
-    """检查客户端是否断开连接"""
-    while True:
-        if await http_request.is_disconnected():
-            extra_log = {'key': current_api_key[:8], 'request_type': request_type, 'model': model, 'error_message': '检测到客户端断开连接'}
-            log('info', "客户端连接已中断，等待API请求完成", extra=extra_log)
-            return True
-        await asyncio.sleep(0.5)

@@ -1,5 +1,5 @@
 from fastapi import HTTPException, Request
-
+import app.config.settings as settings
 # 密码验证依赖
 async def verify_password(request: Request, PASSWORD: str = None):
     """验证请求中的Bearer令牌是否与配置的密码匹配"""
@@ -12,3 +12,5 @@ async def verify_password(request: Request, PASSWORD: str = None):
         if token != PASSWORD:
             raise HTTPException(
                 status_code=401, detail="Unauthorized: Invalid token")
+
+

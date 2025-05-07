@@ -106,23 +106,40 @@ onMounted(() => {
 .info-box {
   background-color: var(--card-background);
   border: 1px solid var(--card-border);
-  border-radius: 8px;
+  border-radius: var(--radius-xl);
   padding: 20px;
   margin-bottom: 20px;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-  transition: background-color 0.3s, border-color 0.3s, box-shadow 0.3s;
+  box-shadow: var(--shadow-md);
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.info-box::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 4px;
+  height: 100%;
+  background: var(--gradient-info);
+  opacity: 0.8;
 }
 
 /* 移动端优化 - 减小外边距 */
 @media (max-width: 768px) {
   .info-box {
     margin-bottom: 12px;
+    padding: 15px 10px;
+    border-radius: var(--radius-lg);
   }
 }
 
 @media (max-width: 480px) {
   .info-box {
     margin-bottom: 8px;
+    padding: 12px 8px;
+    border-radius: var(--radius-md);
   }
 }
 
@@ -131,7 +148,19 @@ onMounted(() => {
   border-bottom: 1px solid var(--color-border);
   padding-bottom: 10px;
   margin-bottom: 20px;
-  transition: color 0.3s, border-color 0.3s;
+  transition: all 0.3s ease;
+  position: relative;
+  font-weight: 600;
+}
+
+.section-title::after {
+  content: '';
+  position: absolute;
+  bottom: -1px;
+  left: 0;
+  width: 50px;
+  height: 2px;
+  background: var(--gradient-info);
 }
 
 .log-filter {
@@ -143,20 +172,47 @@ onMounted(() => {
 }
 
 .log-filter button {
-  padding: 5px 10px;
+  padding: 8px 12px;
   border: 1px solid var(--card-border);
-  border-radius: 4px;
+  border-radius: var(--radius-md);
   background-color: var(--stats-item-bg);
   color: var(--color-text);
   cursor: pointer;
-  min-width: 60px;
-  transition: background-color 0.3s, color 0.3s, border-color 0.3s;
+  min-width: 70px;
+  transition: all 0.3s ease;
+  font-weight: 500;
+  position: relative;
+  overflow: hidden;
+}
+
+.log-filter button::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+  transform: translateX(-100%);
+  transition: transform 0.6s ease;
+}
+
+.log-filter button:hover::before {
+  transform: translateX(100%);
 }
 
 .log-filter button.active {
-  background-color: var(--button-primary);
-  color: var(--button-text);
-  border-color: var(--button-primary);
+  background: var(--gradient-info);
+  color: white;
+  border-color: transparent;
+  box-shadow: var(--shadow-sm);
+  transform: translateY(-2px);
+}
+
+.log-filter button:not(.active):hover {
+  background-color: var(--color-background-mute);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-sm);
 }
 
 /* 移动端优化 */
@@ -167,9 +223,9 @@ onMounted(() => {
   }
   
   .log-filter button {
-    padding: 4px 8px;
+    padding: 6px 10px;
     font-size: 12px;
-    min-width: 50px;
+    min-width: 60px;
   }
 }
 
@@ -181,52 +237,106 @@ onMounted(() => {
   }
   
   .log-filter button {
-    padding: 3px 6px;
+    padding: 5px 8px;
     font-size: 11px;
-    min-width: 40px;
+    min-width: 50px;
   }
 }
 
 .log-container {
   background-color: var(--log-entry-bg);
   border: 1px solid var(--log-entry-border);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   padding: 15px;
   margin-top: 20px;
   max-height: 500px;
   overflow-y: auto;
-  font-family: monospace;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
   font-size: 14px;
   line-height: 1.5;
-  transition: background-color 0.3s, border-color 0.3s;
+  transition: all 0.3s ease;
+  box-shadow: var(--shadow-sm);
+  position: relative;
+}
+
+.log-container::-webkit-scrollbar {
+  width: 8px;
+}
+
+.log-container::-webkit-scrollbar-track {
+  background: var(--color-background-mute);
+  border-radius: 4px;
+}
+
+.log-container::-webkit-scrollbar-thumb {
+  background: var(--button-primary);
+  border-radius: 4px;
+  opacity: 0.7;
+}
+
+.log-container::-webkit-scrollbar-thumb:hover {
+  background: var(--button-primary-hover);
 }
 
 .log-entry {
   margin-bottom: 8px;
-  padding: 8px;
-  border-radius: 4px;
+  padding: 10px;
+  border-radius: var(--radius-md);
   word-break: break-word;
-  transition: background-color 0.3s, border-color 0.3s;
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+  border-left: 4px solid transparent;
+  animation: logEntryAppear 0.3s ease forwards;
+  opacity: 0;
+  transform: translateY(10px);
+}
+
+@keyframes logEntryAppear {
+  0% {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.log-entry::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.05), transparent);
+  transform: translateX(-100%);
+  transition: transform 0.6s ease;
+}
+
+.log-entry:hover::after {
+  transform: translateX(100%);
 }
 
 .log-entry.INFO {
-  background-color: rgba(23, 162, 184, 0.1);
-  border-left: 4px solid #17a2b8;
+  background-color: rgba(59, 130, 246, 0.1);
+  border-left: 4px solid #3b82f6;
 }
 
 .log-entry.WARNING {
-  background-color: rgba(255, 193, 7, 0.1);
-  border-left: 4px solid #ffc107;
+  background-color: rgba(245, 158, 11, 0.1);
+  border-left: 4px solid #f59e0b;
 }
 
 .log-entry.ERROR {
-  background-color: rgba(220, 53, 69, 0.1);
-  border-left: 4px solid #dc3545;
+  background-color: rgba(239, 68, 68, 0.1);
+  border-left: 4px solid #ef4444;
 }
 
 .log-entry.DEBUG {
-  background-color: rgba(23, 162, 184, 0.1);
-  border-left: 4px solid #17a2b8;
+  background-color: rgba(16, 185, 129, 0.1);
+  border-left: 4px solid #10b981;
 }
 
 .log-timestamp {
@@ -234,43 +344,69 @@ onMounted(() => {
   font-size: 12px;
   margin-right: 10px;
   opacity: 0.8;
-  transition: color 0.3s;
+  transition: all 0.3s ease;
+  font-weight: 500;
 }
 
 .log-level {
   font-weight: bold;
   margin-right: 10px;
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
 .log-level.INFO {
-  color: #17a2b8;
+  color: #3b82f6;
+  background-color: rgba(59, 130, 246, 0.1);
 }
 
 .log-level.WARNING {
-  color: #ffc107;
+  color: #f59e0b;
+  background-color: rgba(245, 158, 11, 0.1);
 }
 
 .log-level.ERROR {
-  color: #dc3545;
+  color: #ef4444;
+  background-color: rgba(239, 68, 68, 0.1);
 }
 
 .log-level.DEBUG {
-  color: #17a2b8;
+  color: #10b981;
+  background-color: rgba(16, 185, 129, 0.1);
 }
 
 .log-message {
   color: var(--color-text);
-  transition: color 0.3s;
+  transition: all 0.3s ease;
+  line-height: 1.6;
+}
+
+.log-entry:hover {
+  transform: translateX(5px);
+  box-shadow: var(--shadow-sm);
+}
+
+.log-entry:hover .log-timestamp {
+  opacity: 1;
+  color: var(--button-primary);
+}
+
+.log-entry:hover .log-message {
+  color: var(--color-heading);
 }
 
 @media (max-width: 768px) {
   .log-container {
-    padding: 10px;
+    padding: 12px;
     font-size: 13px;
+    max-height: 400px;
   }
   
   .log-entry {
-    padding: 6px;
+    padding: 8px;
     margin-bottom: 6px;
   }
   
@@ -279,16 +415,22 @@ onMounted(() => {
     display: block;
     margin-bottom: 3px;
   }
+  
+  .log-level {
+    font-size: 11px;
+    padding: 1px 4px;
+  }
 }
 
 @media (max-width: 480px) {
   .log-container {
-    padding: 8px;
+    padding: 10px;
     font-size: 12px;
+    max-height: 350px;
   }
   
   .log-entry {
-    padding: 5px;
+    padding: 6px;
     margin-bottom: 5px;
   }
   
@@ -297,7 +439,13 @@ onMounted(() => {
   }
   
   .log-level {
+    font-size: 10px;
+    padding: 1px 3px;
     margin-right: 5px;
+  }
+  
+  .log-message {
+    font-size: 11px;
   }
 }
 </style>

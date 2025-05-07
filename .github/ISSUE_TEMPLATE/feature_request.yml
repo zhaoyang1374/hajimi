@@ -1,0 +1,32 @@
+name: "功能请求"
+description: Feature request
+labels: [enhancement]
+body:
+  - type: checkboxes
+    attributes:
+      label: 请确认以下事项
+      description: 您可以选择多项，甚至全部。
+      options:
+        - label: 我已阅读了[更新日志](./update.md)。
+        - label: 我确定没有重复的议题或讨论。
+        - label: 我确定此功能尚未实现。
+        - label: 我确定这是一个合理且普遍的需求。
+  - type: textarea
+    id: feature-description
+    attributes:
+      label: 功能描述
+    validations:
+      required: true
+  - type: textarea
+    id: suggested-solution
+    attributes:
+      label: 建议的解决方案
+      description: |
+        实现此需求的解决思路。
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: 附加信息
+      description: |
+        关于此功能请求的任何其他上下文或截图，或者您觉得有帮助的信息。
+        相关的任何其他上下文或截图，或者你觉得有帮助的信息

@@ -1,0 +1,53 @@
+name: "问题反馈"
+description: Bug report
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢您花时间填写此错误报告，请**务必确认您的issue不是重复的且不是因为您的操作或版本问题**
+
+  - type: checkboxes
+    attributes:
+      label: Please make sure of the following things
+      description: |
+        您必须勾选以下所有内容，否则您的issue可能会被直接关闭。
+      options:
+        - label: |
+            我已经阅读了[错误自查](./wiki/error.md)。
+        - label: |
+            我确定没有重复的issue或讨论。
+        - label: |
+            我确定是`Hajimi`自身的问题，而不是酒馆等三方件的原因。
+        - label: |
+            我确定这个问题在最新版本中没有被修复。
+
+  - type: input
+    id: version
+    attributes:
+      label: hajimi版本
+      description: |
+        您使用的是哪个版本的程序？请不要使用`latest`作为答案。
+      placeholder: v0.x.x
+    validations:
+      required: true
+  - type: textarea
+    id: bug-description
+    attributes:
+      label: 问题描述
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: 复现方法
+      description: |
+        请提供能复现此问题的方法以方便开发者定问题，请知悉如果不提供它你的issue可能会被直接关闭。
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / 日志
+      description: |
+        请复制粘贴错误日志，或者截图

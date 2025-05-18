@@ -214,7 +214,7 @@ def init_vertex_ai():
                 
                 # Initialize the client with the credentials
                 try:
-                    client = genai.Client(vertexai=True, credentials=credentials, project=project_id, location="us-central1")
+                    client = genai.Client(vertexai=True, credentials=credentials, project=project_id, location="global")
                     log('info', f"使用 GOOGLE_CREDENTIALS_JSON 环境变量初始化 Vertex AI 用于项目: {project_id}")
                 except Exception as client_err:
                     log('error', f"vertex: 无法初始化 genai.Client: {client_err}")
@@ -230,7 +230,7 @@ def init_vertex_ai():
 
         if credentials and project_id:
             try:
-                client = genai.Client(vertexai=True, credentials=credentials, project=project_id, location="us-central1")
+                client = genai.Client(vertexai=True, credentials=credentials, project=project_id, location="global")
                 log('info', f"使用凭证管理器初始化 Vertex AI 用于项目: {project_id}")
                 return True
             except Exception as e:
@@ -251,7 +251,7 @@ def init_vertex_ai():
                     log('info', f"成功从文件加载凭证用于项目: {project_id}")
                     
                     try:
-                        client = genai.Client(vertexai=True, credentials=credentials, project=project_id, location="us-central1")
+                        client = genai.Client(vertexai=True, credentials=credentials, project=project_id, location="global")
                         log('info', f"Initialized Vertex AI using GOOGLE_APPLICATION_CREDENTIALS file path for project: {project_id}")
                         return True
                     except Exception as client_err:

@@ -54,6 +54,7 @@ API_KEY_DAILY_LIMIT = int(os.environ.get("API_KEY_DAILY_LIMIT", "100"))
 CACHE_EXPIRY_TIME = int(os.environ.get("CACHE_EXPIRY_TIME", "21600"))  # 默认缓存 6 小时 (21600 秒)
 MAX_CACHE_ENTRIES = int(os.environ.get("MAX_CACHE_ENTRIES", "500"))  # 默认最多缓存500条响应
 PRECISE_CACHE = os.environ.get("PRECISE_CACHE", "false").lower() in ["true", "1", "yes"] #是否取所有消息来算缓存键
+CALCULATE_CACHE_ENTRIES = int(os.environ.get("CALCULATE_CACHE_ENTRIES", "6"))  # 默认取最后 6 条消息算缓存键
 
 search={
     "search_mode":os.environ.get("SEARCH_MODE", "false").lower() in ["true", "1", "yes"],
@@ -93,3 +94,8 @@ DASHBOARD_URL = os.environ.get("DASHBOARD_URL", "")
 WHITELIST_MODELS = { x.strip() for x in os.environ.get("WHITELIST_MODELS", "").split(",") if x.strip() }
 # 白名单User-Agent
 WHITELIST_USER_AGENT = { x.strip().lower() for x in os.environ.get("WHITELIST_USER_AGENT", "").split(",") if x.strip() }
+
+# 跨域配置
+# 允许的源列表，逗号分隔，例如 "http://localhost:3000,https://example.com"
+ALLOWED_ORIGINS_STR = os.environ.get("ALLOWED_ORIGINS", "")
+ALLOWED_ORIGINS = [origin.strip() for origin in ALLOWED_ORIGINS_STR.split(",") if origin.strip()]
